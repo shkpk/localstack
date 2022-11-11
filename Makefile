@@ -181,7 +181,7 @@ docker-run-tests:		  ## Initializes the test environment and runs the tests in a
 	# Note: running "install-test-only" below, to avoid pulling in [runtime] extras from transitive dependencies
 	docker run -e LOCALSTACK_INTERNAL_TEST_COLLECT_METRIC=1 --entrypoint= -v `pwd`/tests/:/opt/code/localstack/tests/ -v `pwd`/target/:/opt/code/localstack/target/ -v `/var/run/docker.sock:/var/run/docker.sock` \
 		$(IMAGE_NAME_FULL) \
-	    bash -c "make install-test-only && pip uninstall -y argparse dataclasses && DEBUG=$(DEBUG) PROVIDER_OVERRIDE_LAMBDA=asf PYTEST_LOGLEVEL=debug PYTEST_ARGS='$(PYTEST_ARGS)' COVERAGE_FILE='$(COVERAGE_FILE)' TEST_PATH='$(TEST_PATH)' make test-coverage"
+	    bash -c "make install-test-only && pip uninstall -y argparse dataclasses && DEBUG=$(DEBUG) PROVIDER_OVERRIDE_LAMBDA='asf' PYTEST_LOGLEVEL=debug PYTEST_ARGS='$(PYTEST_ARGS)' COVERAGE_FILE='$(COVERAGE_FILE)' TEST_PATH='$(TEST_PATH)' make test-coverage"
 
 docker-run:        		  ## Run Docker image locally
 	($(VENV_RUN); bin/localstack start)
@@ -202,6 +202,7 @@ test:              		  ## Run automated tests
 test-coverage:     		  ## Run automated tests and create coverage report
 	($(VENV_RUN); python -m coverage --version; \
 		DEBUG=$(DEBUG) \
+		PROVIDER_OVERRIDE_LAMBDA='asf' \
 		LOCALSTACK_INTERNAL_TEST_COLLECT_METRIC=1 \
 		python -m coverage run $(COVERAGE_ARGS) -m \
 		pytest --durations=10 --log-cli-level=$(PYTEST_LOGLEVEL) -s $(PYTEST_ARGS) $(TEST_PATH))
