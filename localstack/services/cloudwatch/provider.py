@@ -13,6 +13,8 @@ from localstack.aws.api.cloudwatch import (
     CloudwatchApi,
     DescribeAlarmsInput,
     DescribeAlarmsOutput,
+    GetMetricStatisticsInput,
+    GetMetricStatisticsOutput,
     ListTagsForResourceOutput,
     PutCompositeAlarmInput,
     PutMetricAlarmInput,
@@ -382,5 +384,18 @@ class CloudwatchProvider(CloudwatchApi, ServiceLifecycleHook):
             _cleanup_describe_output(c)
         for m in response["MetricAlarms"]:
             _cleanup_describe_output(m)
+
+        return response
+
+    @handler("GetMetricStatistics", expand=False)
+    def get_metric_statistics(
+        self, context: RequestContext, request: GetMetricStatisticsInput
+    ) -> GetMetricStatisticsOutput:
+        response = moto.call_moto(context)
+
+        # cleanup -> ExtendendStatics is not included in AWS response if it returned empty
+        for datapoint in response.get("Datapoints"):
+            if "ExtendedStatistics" in datapoint and not datapoint.get("ExtendedStatistics"):
+                datapoint.pop("ExtendedStatistics")
 
         return response
