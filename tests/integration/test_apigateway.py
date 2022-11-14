@@ -193,6 +193,7 @@ class TestAPIGateway:
         assert test_id == api_id
         assert apigw_name == name
 
+    @pytest.mark.skip
     def test_api_gateway_kinesis_integration(self):
         # create target Kinesis stream
         stream = aws_stack.create_kinesis_stream(self.TEST_STREAM_KINESIS_API_GW)
