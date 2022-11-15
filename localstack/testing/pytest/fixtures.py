@@ -22,7 +22,7 @@ from localstack import config
 from localstack.aws.accounts import get_aws_account_id
 from localstack.constants import TEST_AWS_ACCESS_KEY_ID, TEST_AWS_SECRET_ACCESS_KEY
 from localstack.testing.aws.cloudformation_utils import load_template_file, render_template
-from localstack.testing.aws.util import get_lambda_logs
+from localstack.testing.aws.util import get_lambda_logs, is_aws_cloud
 from localstack.utils import testutil
 from localstack.utils.aws import aws_stack
 from localstack.utils.aws.aws_stack import create_dynamodb_table
@@ -1376,6 +1376,27 @@ def create_lambda_function(
             logs_client.delete_log_group(logGroupName=log_group_name)
         except Exception:
             LOG.debug(f"Unable to delete log group {log_group_name} in cleanup")
+
+
+@pytest.fixture
+def upload_file(s3_create_bucket, s3_client):
+    def _upload_file(file_path: str, bucket_name: str = None):
+        if not bucket_name:
+            bucket_name = s3_create_bucket()
+        key = f"file-{short_uid()}"
+
+        s3_client.upload_file(
+            file_path,
+            Bucket=bucket_name,
+            Key=key,
+        )
+
+        domain = "amazonaws.com" if is_aws_cloud() else "localhost.localstack.cloud:4566"
+        url = f"https://{bucket_name}.s3.{domain}/{key}"
+
+        return {"Bucket": bucket_name, "Key": key, "Url": url}
+
+    yield _upload_file
 
 
 @pytest.fixture
