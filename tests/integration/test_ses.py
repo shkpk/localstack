@@ -224,3 +224,101 @@ class TestSES:
         assert rule_set["Metadata"]["Name"] == rule_set_name
         assert original_rule_set["Rules"] == rule_set["Rules"]
         assert [x["Name"] for x in rule_set["Rules"]] == rule_names
+
+    @pytest.mark.skip
+    @pytest.mark.only_localstack
+    def test_ses_sns_topic_integration(
+        self,
+        ses_client,
+        sqs_create_queue,
+        sqs_client,
+        sns_topic,
+        sns_create_sqs_subscription,
+        ses_configuration_set,
+        ses_configuration_set_event_destination,
+        ses_verify_identity,
+        sqs_queue_arn,
+        sqs_receive_messages_delete,
+    ):
+        """
+        Repro for #7184 - test that this test is not runnable in the sandbox account since it
+        requires a
+        validated email address. We do not have support for this yet.
+        """
+        email_address = f"repro-7184-{short_uid()}@test.com"
+        ses_verify_identity(email_address)
+
+        # create queue to listen for for SES -> SNS events
+        queue_name = f"ses_events_queue-{short_uid()}"
+        # TODO: can we just use `sqs_queue` here?
+        queue_url = sqs_create_queue(
+            QueueName=queue_name,
+            Attributes={
+                "SqsManagedSseEnabled": "false",
+            },
+        )
+        queue_arn = sqs_queue_arn(queue_url)
+
+        # update queue policy
+        attributes = {
+            "Policy": json.dumps(
+                {
+                    "Id": f"Policy{short_uid()}",
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": f"stmt{short_uid()}",
+                            "Action": "sqs:*",
+                            "Effect": "Allow",
+                            "Resource": queue_arn,
+                            "Condition": {
+                                "ArnEquals": {
+                                    "aws:SourceArn": queue_arn,
+                                },
+                            },
+                            "Principal": "*",
+                        },
+                    ],
+                }
+            ),
+        }
+        sqs_client.set_queue_attributes(QueueUrl=queue_url, Attributes=attributes)
+
+        # Subscribe the queue to the topic
+        topic_arn = sns_topic["Attributes"]["TopicArn"]
+        sns_create_sqs_subscription(topic_arn=topic_arn, queue_url=queue_url)
+
+        # create the config set
+        config_set_name = f"config-set-{short_uid()}"
+        ses_configuration_set(config_set_name)
+        event_destination_name = f"config-set-event-destination-{short_uid()}"
+        ses_configuration_set_event_destination(config_set_name, event_destination_name, topic_arn)
+
+        # send an email to trigger the SNS message and SQS message
+        destination = {
+            "ToAddresses": [email_address],
+        }
+        message = {
+            "Subject": {
+                "Data": "foo subject",
+            },
+            "Body": {
+                "Text": {
+                    "Data": "saml body",
+                },
+            },
+        }
+        ses_client.send_email(
+            Destination=destination,
+            Message=message,
+            ConfigurationSetName=config_set_name,
+            Source=email_address,
+        )
+
+        # assert that we have received some messages
+        # NOTE: AWS sends three messages:
+        # 1. a test message to prove that SNS and SQS can integrate
+        # 2. a "Sent" message
+        # 3. a "Dispatched" message
+        messages = sqs_receive_messages_delete(queue_url)
+        assert len(messages) > 0
